@@ -6,6 +6,7 @@ import httpx
 import pandas as pd
 from tqdm import tqdm
 from common import common
+from ip_pool import IpPool
 
 url = "https://www.douyin.com/aweme/v1/web/comment/list/"
 reply_url = url + "reply/"
@@ -29,15 +30,15 @@ async def get_comments_async(client: httpx.AsyncClient, aweme_id: str, cursor: s
         # Alternatively, you could raise an exception here to indicate that the cookies might be expired or invalid.
         return {}
 
-
-
+ip_pool_ins = IpPool()
 async def fetch_all_comments_async(aweme_id: str) -> list[dict[str, Any]]:
-    async with httpx.AsyncClient(timeout=600) as client:
-        cursor = 0
-        all_comments = []
-        has_more = 1
-        with tqdm(desc="Fetching comments", unit="comment") as pbar:
-            while has_more:
+    cursor = 0
+    all_comments = []
+    has_more = 1
+    with tqdm(desc="Fetching comments", unit="comment") as pbar:
+        while has_more:
+            global ip_pool_ins
+            async with httpx.AsyncClient(timeout=600, proxy=ip_pool_ins.get_ip()) as client:
                 response = await get_comments_async(client, aweme_id, cursor=str(cursor))
                 comments = response.get("comments", [])
                 if isinstance(comments, list):
@@ -47,7 +48,7 @@ async def fetch_all_comments_async(aweme_id: str) -> list[dict[str, Any]]:
                 if has_more:
                     cursor = response.get("cursor", 0)
                 await asyncio.sleep(1)
-        return all_comments
+    return all_comments
 
 
 async def get_replies_async(client: httpx.AsyncClient, semaphore, comment_id: str, cursor: str = "0",
@@ -159,13 +160,13 @@ async def main():
     comments_file = os.path.join(base_dir, "comments.csv")
     save(all_comments_, comments_file)
 
-    # 回复部分 如果不需要直接注释掉
-    all_replies = await fetch_all_replies_async(all_comments)
-    print(f"Found {len(all_replies)} replies")
-    print(f"Found {len(all_replies) + len(all_comments)} in totals")
-    all_replies = process_replies(all_replies, all_comments_)
-    replies_file = os.path.join(base_dir, "replies.csv")
-    save(all_replies, replies_file)
+    # 回复部分 不建议带上
+    # all_replies = await fetch_all_replies_async(all_comments)
+    # print(f"Found {len(all_replies)} replies")
+    # print(f"Found {len(all_replies) + len(all_comments)} in totals")
+    # all_replies = process_replies(all_replies, all_comments_)
+    # replies_file = os.path.join(base_dir, "replies.csv")
+    # save(all_replies, replies_file)
 
 
 # 运行 main 函数
